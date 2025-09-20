@@ -1,0 +1,77 @@
+@model IEnumerable<SimpleCRM.Models.Timesheet>
+
+@{
+    ViewData["Title"] = "Timesheet";
+}
+
+<div class="max-w-6xl mx-auto mt-12">
+    <div class="flex items-center justify-between mb-6">
+        <h2 class="text-3xl font-bold text-gray-800">⏰ Timesheet @(ViewBag.IsAdmin ? "(All Employees)" : "(Your Entries)")</h2>
+        <a asp-controller="Timesheet" asp-action="Create" class="bg-gradient-to-r from-purple-500 to-pink-600 text-white px-6 py-3 rounded-lg shadow-lg hover:scale-105 transition transform flex items-center gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-5 h-5">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+            </svg>
+            Add Entry
+        </a>
+    </div>
+
+    <div class="bg-white rounded-xl shadow-lg overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="min-w-full">
+                <thead class="bg-gradient-to-r from-purple-600 to-pink-600 text-white">
+                    <tr>
+                        <th class="px-6 py-4 text-left">Date</th>
+                        <th class="px-6 py-4 text-left">Hours</th>
+                        <th class="px-6 py-4 text-left">Project</th>
+                        <th class="px-6 py-4 text-left">Description</th>
+                        @if (ViewBag.IsAdmin)
+                        {
+                            <th class="px-6 py-4 text-left">User ID</th>
+                        }
+                        <th class="px-6 py-4 text-center">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var entry in Model)
+                    {
+                        <tr class="border-b hover:bg-gray-50 transition">
+                            <td class="px-6 py-4">@entry.Date.ToString("MMM dd, yyyy")</td>
+                            <td class="px-6 py-4">
+                                <span class="px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                    @entry.HoursWorked hrs
+                                </span>
+                            </td>
+                            <td class="px-6 py-4 font-medium">@entry.ProjectName</td>
+                            <td class="px-6 py-4">@entry.Description</td>
+                            @if (ViewBag.IsAdmin)
+                            {
+                                <td class="px-6 py-4">User @entry.UserId</td>
+                            }
+                            <td class="px-6 py-4 text-center">
+                                <a asp-controller="Timesheet" asp-action="Edit" asp-route-id="@entry.Id" class="text-blue-600 hover:underline mr-3">Edit</a>
+                                <a asp-controller="Timesheet" asp-action="Delete" asp-route-id="@entry.Id" class="text-red-600 hover:underline" 
+                                   onclick="return confirm('Are you sure?')">Delete</a>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Pagination -->
+    <div class="flex justify-center mt-6 gap-2">
+        @if ((int)ViewBag.TotalPages > 1)
+        {
+            int currentPage = (int)ViewBag.Page;
+            int totalPages = (int)ViewBag.TotalPages;
+            
+            for (int i = 1; i <= totalPages; i++)
+            {
+                <a href="?page=@i" class="px-3 py-2 @(i == currentPage ? "bg-purple-600 text-white" : "bg-white text-purple-600 hover:bg-purple-50") border rounded">
+                    @i
+                </a>
+            }
+        }
+    </div>
+</div>

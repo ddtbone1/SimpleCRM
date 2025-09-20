@@ -1,0 +1,86 @@
+@model IEnumerable<SimpleCRM.Models.Customer>
+
+@{
+    ViewData["Title"] = "Customers";
+}
+
+<div class="max-w-4xl mx-auto mt-12">
+    <div class="flex items-center justify-between mb-6">
+        <h2 class="text-3xl font-bold">👥 Customers @(User.IsInRole("Admin") ? "" : "(View Only)")</h2>
+        @if (User.IsInRole("Admin"))
+        {
+            <a asp-controller="Customers" asp-action="Create" class="bg-blue-600 text-white px-4 py-2 rounded-lg shadow hover:bg-blue-700 flex items-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-5 h-5">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                </svg>
+                Add Customer
+            </a>
+        }
+        else
+        {
+            <div class="bg-gray-100 text-gray-600 px-4 py-2 rounded-lg">
+                <span class="text-sm">👁️ View Only Mode</span>
+            </div>
+        }
+    </div>
+    <div class="overflow-x-auto">
+        <table class="min-w-full bg-white rounded-xl shadow-lg">
+            <thead class="bg-gradient-to-r from-blue-500 to-purple-600 text-white">
+                <tr>
+                    <th class="px-6 py-3 text-left text-xs font-semibold uppercase">Name</th>
+                    <th class="px-6 py-3 text-left text-xs font-semibold uppercase">Email</th>
+                    <th class="px-6 py-3 text-left text-xs font-semibold uppercase">Phone</th>
+                    <th class="px-6 py-3 text-left text-xs font-semibold uppercase">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var customer in Model)
+                {
+                    <tr class="border-b hover:bg-gray-50 transition">
+                        <td class="px-6 py-4 flex items-center gap-2">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5 text-blue-500">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z" />
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 19.125V18A5.25 5.25 0 019.75 12.75h4.5A5.25 5.25 0 0119.5 18v1.125" />
+                            </svg>
+                            @customer.Name
+                        </td>
+                        <td class="px-6 py-4">@customer.Email</td>
+                        <td class="px-6 py-4">@customer.Phone</td>
+                        <td class="px-6 py-4">
+                            @if (User.IsInRole("Admin"))
+                            {
+                                <a asp-controller="Customers" asp-action="Edit" asp-route-id="@customer.Id" class="inline-flex items-center gap-1 text-blue-600 hover:underline mr-2">
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-4 h-4">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487a2.1 2.1 0 112.97 2.97L7.5 19.789l-4 1 1-4 12.362-12.302z" />
+                                    </svg>
+                                    Edit
+                                </a>
+                                <a asp-controller="Customers" asp-action="Delete" asp-route-id="@customer.Id" class="inline-flex items-center gap-1 text-red-600 hover:underline" onclick="return confirm('Are you sure?')">
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-4 h-4">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
+                                    Delete
+                                </a>
+                            }
+                            else
+                            {
+                                <span class="text-gray-500 text-sm">View Only</span>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+    <div class="flex justify-center mt-6 gap-2">
+        @if ((int)ViewBag.TotalPages > 1)
+        {
+            int currentPage = (int)ViewBag.Page;
+            int totalPages = (int)ViewBag.TotalPages;
+            for (int i = 1; i <= totalPages; i++)
+            {
+                <a href="?page=@i" class="px-3 py-1 rounded @((i == currentPage ? "bg-blue-600 text-white" : "bg-gray-200 text-gray-700")) hover:bg-blue-500 hover:text-white transition">@i</a>
+            }
+        }
+    </div>
+</div>
