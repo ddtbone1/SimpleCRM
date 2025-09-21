@@ -1,0 +1,31 @@
+@using Microsoft.EntityFrameworkCore
+@using SimpleCRM.Data
+@inject CrmDbContext _context
+
+@{
+    var displayName = User.Identity?.Name ?? "Unknown";
+    
+    // If user is an agent, try to get their agent name
+    if (User.IsInRole("Agent"))
+    {
+        var userId = User.FindFirst("UserId")?.Value;
+        if (int.TryParse(userId, out int userIdInt))
+        {
+            var user = await _context.Users
+                .Include(u => u.Agent)
+                .FirstOrDefaultAsync(u => u.Id == userIdInt && u.DeletedAt == null);
+                
+            if (user?.Agent != null)
+            {
+                displayName = user.Agent.Name;
+            }
+            else if (user != null && !string.IsNullOrEmpty(user.FirstName) && !string.IsNullOrEmpty(user.LastName))
+            {
+                // Fallback to user's first and last name if agent record doesn't exist
+                displayName = $"{user.FirstName} {user.LastName}";
+            }
+        }
+    }
+}
+
+@displayName

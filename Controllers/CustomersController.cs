@@ -1,47 +1,35 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.EntityFrameworkCore;
 using SimpleCRM.Models;
-using System.Collections.Generic;
-using System.Linq;
+using SimpleCRM.Data;
 
 namespace SimpleCRM.Controllers
 {
     [Authorize]
     public class CustomersController : Controller
     {
-        public static List<Customer> customers = new List<Customer>();
-        private static int nextId = 1;
+        private readonly CrmDbContext _context;
 
-        static CustomersController()
+        public CustomersController(CrmDbContext context)
         {
-            if (!customers.Any())
-            {
-                for (int i = 1; i <= 50; i++)
-                {
-                    customers.Add(new Customer
-                    {
-                        Id = i,
-                        Name = $"Customer {i}",
-                        Email = $"customer{i}@example.com",
-                        Phone = $"555-010{i:D2}"
-                    });
-                }
-                nextId = 51;
-            }
+            _context = context;
         }
 
-        public IActionResult Index()
+        public async Task<IActionResult> Index(int page = 1)
         {
             int pageSize = 10;
-            int page = 1;
-            if (Request.Query.ContainsKey("page"))
-            {
-                int.TryParse(Request.Query["page"], out page);
-                if (page < 1) page = 1;
-            }
-            int totalItems = customers.Count;
-            int totalPages = (int)Math.Ceiling(totalItems / (double)pageSize);
-            var pagedCustomers = customers.Skip((page - 1) * pageSize).Take(pageSize).ToList();
+            if (page < 1) page = 1;
+            
+            var totalItems = await _context.Customers.CountAsync();
+            var totalPages = (int)Math.Ceiling(totalItems / (double)pageSize);
+            
+            var pagedCustomers = await _context.Customers
+                .OrderBy(c => c.Name)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .ToListAsync();
+            
             ViewBag.Page = page;
             ViewBag.TotalPages = totalPages;
             return View(pagedCustomers);
@@ -56,55 +44,55 @@ namespace SimpleCRM.Controllers
         }
 
         [HttpPost]
-        public IActionResult Create(Customer customer)
+        public async Task<IActionResult> Create(Customer customer)
         {
             if (!User.IsInRole("Admin"))
                 return Forbid();
                 
             if (ModelState.IsValid)
             {
-                customer.Id = nextId++;
-                customers.Add(customer);
+                _context.Customers.Add(customer);
+                await _context.SaveChangesAsync();
                 return RedirectToAction("Index");
             }
             return View(customer);
         }
 
-        public IActionResult Edit(int id)
+        public async Task<IActionResult> Edit(int id)
         {
             if (!User.IsInRole("Admin"))
                 return Forbid();
-            var customer = customers.FirstOrDefault(c => c.Id == id);
+                
+            var customer = await _context.Customers.FindAsync(id);
             if (customer == null) return NotFound();
             return View(customer);
         }
 
         [HttpPost]
-        public IActionResult Edit(Customer customer)
+        public async Task<IActionResult> Edit(Customer customer)
         {
             if (!User.IsInRole("Admin"))
                 return Forbid();
                 
-            var existing = customers.FirstOrDefault(c => c.Id == customer.Id);
-            if (existing == null) return NotFound();
             if (ModelState.IsValid)
             {
-                existing.Name = customer.Name;
-                existing.Email = customer.Email;
-                existing.Phone = customer.Phone;
+                _context.Customers.Update(customer);
+                await _context.SaveChangesAsync();
                 return RedirectToAction("Index");
             }
             return View(customer);
         }
 
-        public IActionResult Delete(int id)
+        public async Task<IActionResult> Delete(int id)
         {
             if (!User.IsInRole("Admin"))
                 return Forbid();
                 
-            var customer = customers.FirstOrDefault(c => c.Id == id);
+            var customer = await _context.Customers.FindAsync(id);
             if (customer == null) return NotFound();
-            customers.Remove(customer);
+            
+            _context.Customers.Remove(customer);
+            await _context.SaveChangesAsync();
             return RedirectToAction("Index");
         }
     }

@@ -1,46 +1,38 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.EntityFrameworkCore;
 using SimpleCRM.Models;
+using SimpleCRM.Data;
+using SimpleCRM.Services;
 
 namespace SimpleCRM.Controllers
 {
     [Authorize(Roles = "Admin")]
     public class AgentsController : Controller
     {
-        public static List<Agent> agents = new List<Agent>();
-        private static int nextId = 1;
+        private readonly CrmDbContext _context;
+        private readonly IAuditService _auditService;
 
-        static AgentsController()
+        public AgentsController(CrmDbContext context, IAuditService auditService)
         {
-            // Add mock agents
-            for (int i = 1; i <= 20; i++)
-            {
-                agents.Add(new Agent
-                {
-                    Id = nextId++,
-                    Name = $"Agent {i}",
-                    Email = $"agent{i}@crm.com",
-                    Phone = $"555-{i:D4}",
-                    Department = i % 2 == 0 ? "Sales" : "Support",
-                    Position = i % 3 == 0 ? "Senior Agent" : "Agent",
-                    HireDate = DateTime.Now.AddDays(-Random.Shared.Next(30, 365))
-                });
-            }
+            _context = context;
+            _auditService = auditService;
         }
 
-        public IActionResult Index(int page = 1)
+        public async Task<IActionResult> Index(int page = 1)
         {
             int pageSize = 10;
-            var totalAgents = agents.Count;
+            var totalAgents = await _context.Agents.CountAsync();
             var totalPages = (int)Math.Ceiling((double)totalAgents / pageSize);
             
             if (page < 1) page = 1;
             if (page > totalPages && totalPages > 0) page = totalPages;
 
-            var paginatedAgents = agents
+            var paginatedAgents = await _context.Agents
+                .OrderBy(a => a.Name)
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
-                .ToList();
+                .ToListAsync();
 
             ViewBag.Page = page;
             ViewBag.TotalPages = totalPages;
@@ -55,28 +47,31 @@ namespace SimpleCRM.Controllers
         }
 
         [HttpPost]
-        public IActionResult Create(Agent agent)
+        public async Task<IActionResult> Create(Agent agent)
         {
             if (ModelState.IsValid)
             {
-                agent.Id = nextId++;
-                agents.Add(agent);
+                agent.CreatedDate = DateTime.Now;
+                agent.IsActive = true;
+                
+                _context.Agents.Add(agent);
+                await _context.SaveChangesAsync();
                 return RedirectToAction("Index");
             }
             return View(agent);
         }
 
-        public IActionResult Edit(int id)
+        public async Task<IActionResult> Edit(int id)
         {
-            var agent = agents.FirstOrDefault(a => a.Id == id);
+            var agent = await _context.Agents.FindAsync(id);
             if (agent == null) return NotFound();
             return View(agent);
         }
 
         [HttpPost]
-        public IActionResult Edit(Agent agent)
+        public async Task<IActionResult> Edit(Agent agent)
         {
-            var existing = agents.FirstOrDefault(a => a.Id == agent.Id);
+            var existing = await _context.Agents.FindAsync(agent.Id);
             if (existing == null) return NotFound();
 
             if (ModelState.IsValid)
@@ -87,18 +82,156 @@ namespace SimpleCRM.Controllers
                 existing.Department = agent.Department;
                 existing.Position = agent.Position;
                 existing.IsActive = agent.IsActive;
+                existing.HireDate = agent.HireDate;
+                
+                await _context.SaveChangesAsync();
                 return RedirectToAction("Index");
             }
             return View(agent);
         }
 
-        public IActionResult Delete(int id)
+        public async Task<IActionResult> Delete(int id)
         {
-            var agent = agents.FirstOrDefault(a => a.Id == id);
+            var agent = await _context.Agents.FindAsync(id);
             if (agent == null) return NotFound();
             
-            agents.Remove(agent);
+            // Find the associated user account
+            var associatedUser = await _context.Users
+                .FirstOrDefaultAsync(u => u.AgentId == id && u.DeletedAt == null);
+            
+            // Soft delete the agent
+            agent.DeletedAt = DateTime.UtcNow;
+            agent.UpdatedDate = DateTime.UtcNow;
+            
+            // Deactivate the associated user account if it exists
+            if (associatedUser != null)
+            {
+                associatedUser.Status = "DEACTIVATED";
+                associatedUser.DeletedAt = DateTime.UtcNow;
+                associatedUser.UpdatedDate = DateTime.UtcNow;
+                
+                // Log the deactivation
+                await _auditService.LogAsync(
+                    int.Parse(User.FindFirst("UserId")?.Value ?? "0"),
+                    "DEACTIVATE_USER",
+                    "User",
+                    associatedUser.Id,
+                    $"Deactivated user account {associatedUser.Username} due to agent deletion: {agent.Name}",
+                    HttpContext.Connection.RemoteIpAddress?.ToString(),
+                    HttpContext.Request.Headers["User-Agent"].ToString()
+                );
+            }
+            
+            // Log the agent deletion
+            await _auditService.LogAsync(
+                int.Parse(User.FindFirst("UserId")?.Value ?? "0"),
+                "DELETE_AGENT",
+                "Agent",
+                id,
+                $"Deleted agent: {agent.Name}" + (associatedUser != null ? $" and deactivated user: {associatedUser.Username}" : ""),
+                HttpContext.Connection.RemoteIpAddress?.ToString(),
+                HttpContext.Request.Headers["User-Agent"].ToString()
+            );
+            
+            await _context.SaveChangesAsync();
             return RedirectToAction("Index");
+        }
+
+        // Pending Users Management
+        public async Task<IActionResult> GetPendingUsers()
+        {
+            var pendingUsers = await _context.Users
+                .Where(u => u.Status == "PENDING")
+                .Include(u => u.Agent)
+                .OrderBy(u => u.CreatedDate)
+                .ToListAsync();
+
+            return PartialView("_PendingUsers", pendingUsers);
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> ApproveUser(int userId, string? comments = null)
+        {
+            var user = await _context.Users.FindAsync(userId);
+            if (user == null)
+            {
+                return Json(new { success = false, message = "User not found." });
+            }
+
+            // Create Agent record automatically using user's registration information
+            var newAgent = new Agent
+            {
+                Name = $"{user.FirstName} {user.LastName}".Trim(),
+                Email = user.Email,
+                Phone = user.Phone ?? "",
+                Department = user.Department ?? "Unassigned",
+                Position = user.Position ?? "Agent",
+                HireDate = user.HireDate ?? DateTime.Now,
+                IsActive = true,
+                CreatedDate = DateTime.Now
+            };
+
+            _context.Agents.Add(newAgent);
+            await _context.SaveChangesAsync(); // Save to get the Agent ID
+
+            // Update user to link to the new agent
+            user.Status = "ACTIVE";
+            user.AgentId = newAgent.Id; // Link the user to the created agent
+            user.ApprovedByUserId = User.Identity?.Name;
+            user.ApprovedDate = DateTime.UtcNow;
+            user.ApprovalComments = comments ?? "Approved by admin";
+            user.UpdatedDate = DateTime.UtcNow;
+
+            await _context.SaveChangesAsync();
+
+            // Log the approval
+            await _auditService.LogAsync(
+                int.Parse(User.FindFirst("UserId")?.Value ?? "0"),
+                "APPROVE_USER",
+                "User",
+                userId,
+                $"Approved user: {user.Username} and created agent: {newAgent.Name}",
+                HttpContext.Connection.RemoteIpAddress?.ToString(),
+                HttpContext.Request.Headers["User-Agent"].ToString()
+            );
+
+            return Json(new { success = true, message = $"User {user.Username} has been approved and added to Agents Management successfully." });
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> RejectUser(int userId, string reason)
+        {
+            if (string.IsNullOrEmpty(reason))
+            {
+                return Json(new { success = false, message = "Rejection reason is required." });
+            }
+
+            var user = await _context.Users.FindAsync(userId);
+            if (user == null)
+            {
+                return Json(new { success = false, message = "User not found." });
+            }
+
+            user.Status = "DECLINED";
+            user.ApprovedByUserId = User.Identity?.Name;
+            user.ApprovedDate = DateTime.UtcNow;
+            user.ApprovalComments = reason;
+            user.UpdatedDate = DateTime.UtcNow;
+
+            await _context.SaveChangesAsync();
+
+            // Log the rejection
+            await _auditService.LogAsync(
+                int.Parse(User.FindFirst("UserId")?.Value ?? "0"),
+                "REJECT_USER",
+                "User",
+                userId,
+                $"Rejected user: {user.Username}. Reason: {reason}",
+                HttpContext.Connection.RemoteIpAddress?.ToString(),
+                HttpContext.Request.Headers["User-Agent"].ToString()
+            );
+
+            return Json(new { success = true, message = $"User {user.Username} has been rejected." });
         }
     }
 }

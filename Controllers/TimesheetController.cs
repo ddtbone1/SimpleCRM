@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.EntityFrameworkCore;
 using SimpleCRM.Models;
+using SimpleCRM.Data;
 using System.Security.Claims;
 
 namespace SimpleCRM.Controllers
@@ -8,46 +10,36 @@ namespace SimpleCRM.Controllers
     [Authorize]
     public class TimesheetController : Controller
     {
-        public static List<Timesheet> timesheets = new List<Timesheet>();
-        private static int nextId = 1;
+        private readonly CrmDbContext _context;
 
-        static TimesheetController()
+        public TimesheetController(CrmDbContext context)
         {
-            // Add mock timesheet entries
-            for (int i = 1; i <= 30; i++)
-            {
-                timesheets.Add(new Timesheet
-                {
-                    Id = nextId++,
-                    UserId = Random.Shared.Next(1, 3), // Random user 1 or 2
-                    Date = DateTime.Now.AddDays(-Random.Shared.Next(0, 30)),
-                    HoursWorked = Random.Shared.Next(4, 9),
-                    Description = $"Work task {i}",
-                    ProjectName = $"Project {Random.Shared.Next(1, 5)}"
-                });
-            }
+            _context = context;
         }
 
-        public IActionResult Index(int page = 1)
+        public async Task<IActionResult> Index(int page = 1)
         {
             int pageSize = 10;
             var currentUserId = int.Parse(User.FindFirst("UserId")?.Value ?? "0");
             var isAdmin = User.IsInRole("Admin");
 
             // Admin sees all, User sees only their own
-            var userTimesheets = isAdmin ? timesheets : timesheets.Where(t => t.UserId == currentUserId);
+            var query = isAdmin ? _context.Timesheets : _context.Timesheets.Where(t => t.UserId == currentUserId);
             
-            var totalEntries = userTimesheets.Count();
+            var totalEntries = await query.CountAsync();
             var totalPages = (int)Math.Ceiling((double)totalEntries / pageSize);
             
             if (page < 1) page = 1;
             if (page > totalPages && totalPages > 0) page = totalPages;
 
-            var paginatedEntries = userTimesheets
+            var paginatedEntries = await query
+                .Include(t => t.User)
+                    .ThenInclude(u => u.Agent)
+                .Include(t => t.ApprovedByUser)
                 .OrderByDescending(t => t.Date)
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
-                .ToList();
+                .ToListAsync();
 
             ViewBag.Page = page;
             ViewBag.TotalPages = totalPages;
@@ -63,21 +55,24 @@ namespace SimpleCRM.Controllers
         }
 
         [HttpPost]
-        public IActionResult Create(Timesheet timesheet)
+        public async Task<IActionResult> Create(Timesheet timesheet)
         {
             if (ModelState.IsValid)
             {
-                timesheet.Id = nextId++;
                 timesheet.UserId = int.Parse(User.FindFirst("UserId")?.Value ?? "0");
-                timesheets.Add(timesheet);
+                timesheet.CreatedDate = DateTime.Now;
+                timesheet.Status = "DRAFT";
+                
+                _context.Timesheets.Add(timesheet);
+                await _context.SaveChangesAsync();
                 return RedirectToAction("Index");
             }
             return View(timesheet);
         }
 
-        public IActionResult Edit(int id)
+        public async Task<IActionResult> Edit(int id)
         {
-            var timesheet = timesheets.FirstOrDefault(t => t.Id == id);
+            var timesheet = await _context.Timesheets.FindAsync(id);
             if (timesheet == null) return NotFound();
 
             // Users can only edit their own entries
@@ -89,9 +84,9 @@ namespace SimpleCRM.Controllers
         }
 
         [HttpPost]
-        public IActionResult Edit(Timesheet timesheet)
+        public async Task<IActionResult> Edit(Timesheet timesheet)
         {
-            var existing = timesheets.FirstOrDefault(t => t.Id == timesheet.Id);
+            var existing = await _context.Timesheets.FindAsync(timesheet.Id);
             if (existing == null) return NotFound();
 
             var currentUserId = int.Parse(User.FindFirst("UserId")?.Value ?? "0");
@@ -104,21 +99,120 @@ namespace SimpleCRM.Controllers
                 existing.HoursWorked = timesheet.HoursWorked;
                 existing.Description = timesheet.Description;
                 existing.ProjectName = timesheet.ProjectName;
+                existing.StartTime = timesheet.StartTime;
+                existing.EndTime = timesheet.EndTime;
+                existing.IsBillable = timesheet.IsBillable;
+                existing.Category = timesheet.Category;
+                
+                await _context.SaveChangesAsync();
                 return RedirectToAction("Index");
             }
             return View(timesheet);
         }
 
-        public IActionResult Delete(int id)
+        public async Task<IActionResult> Delete(int id)
         {
-            var timesheet = timesheets.FirstOrDefault(t => t.Id == id);
+            var timesheet = await _context.Timesheets.FindAsync(id);
             if (timesheet == null) return NotFound();
 
             var currentUserId = int.Parse(User.FindFirst("UserId")?.Value ?? "0");
             if (!User.IsInRole("Admin") && timesheet.UserId != currentUserId)
                 return Forbid();
 
-            timesheets.Remove(timesheet);
+            _context.Timesheets.Remove(timesheet);
+            await _context.SaveChangesAsync();
+            return RedirectToAction("Index");
+        }
+
+        // Approval workflow methods (Admin only)
+        [HttpPost]
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> Approve(int id, string? comments)
+        {
+            var timesheet = await _context.Timesheets.FindAsync(id);
+            if (timesheet == null) return NotFound();
+
+            var currentUserId = int.Parse(User.FindFirst("UserId")?.Value ?? "0");
+            
+            timesheet.Status = "APPROVED";
+            timesheet.ApprovedByUserId = currentUserId;
+            timesheet.ApprovedDate = DateTime.Now;
+            timesheet.ApprovalComments = comments ?? string.Empty;
+
+            await _context.SaveChangesAsync();
+            return RedirectToAction("Index");
+        }
+
+        [HttpPost]
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> Reject(int id, string? comments)
+        {
+            var timesheet = await _context.Timesheets.FindAsync(id);
+            if (timesheet == null) return NotFound();
+
+            var currentUserId = int.Parse(User.FindFirst("UserId")?.Value ?? "0");
+            
+            timesheet.Status = "REJECTED";
+            timesheet.ApprovedByUserId = currentUserId;
+            timesheet.ApprovedDate = DateTime.Now;
+            timesheet.RejectionReason = comments ?? string.Empty;
+
+            await _context.SaveChangesAsync();
+            return RedirectToAction("Index");
+        }
+
+        // Weekly view
+        public async Task<IActionResult> WeeklyView(DateTime? weekStart = null)
+        {
+            var currentUserId = int.Parse(User.FindFirst("UserId")?.Value ?? "0");
+            var isAdmin = User.IsInRole("Admin");
+
+            var startOfWeek = weekStart ?? GetStartOfWeek(DateTime.Today);
+            var endOfWeek = startOfWeek.AddDays(6);
+
+            var query = isAdmin ? _context.Timesheets : _context.Timesheets.Where(t => t.UserId == currentUserId);
+            
+            var weeklyEntries = await query
+                .Include(t => t.User)
+                    .ThenInclude(u => u.Agent)
+                .Include(t => t.ApprovedByUser)
+                .Where(t => t.Date >= startOfWeek && t.Date <= endOfWeek)
+                .OrderBy(t => t.Date)
+                .ToListAsync();
+
+            ViewBag.WeekStart = startOfWeek;
+            ViewBag.WeekEnd = endOfWeek;
+            ViewBag.IsAdmin = isAdmin;
+            ViewBag.TotalHours = weeklyEntries.Sum(t => t.HoursWorked);
+
+            return View(weeklyEntries);
+        }
+
+        private DateTime GetStartOfWeek(DateTime date)
+        {
+            var diff = (7 + (date.DayOfWeek - DayOfWeek.Monday)) % 7;
+            return date.AddDays(-1 * diff).Date;
+        }
+
+        // Bulk approval for Admin
+        [HttpPost]
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> BulkApprove(int[] timesheetIds)
+        {
+            var currentUserId = int.Parse(User.FindFirst("UserId")?.Value ?? "0");
+            
+            var timesheets = await _context.Timesheets
+                .Where(t => timesheetIds.Contains(t.Id))
+                .ToListAsync();
+            
+            foreach (var timesheet in timesheets)
+            {
+                timesheet.Status = "APPROVED";
+                timesheet.ApprovedByUserId = currentUserId;
+                timesheet.ApprovedDate = DateTime.Now;
+            }
+
+            await _context.SaveChangesAsync();
             return RedirectToAction("Index");
         }
     }

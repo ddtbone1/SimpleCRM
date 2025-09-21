@@ -4,74 +4,202 @@
     ViewData["Title"] = "Timesheet";
 }
 
-<div class="max-w-6xl mx-auto mt-12">
-    <div class="flex items-center justify-between mb-6">
-        <h2 class="text-3xl font-bold text-gray-800">⏰ Timesheet @(ViewBag.IsAdmin ? "(All Employees)" : "(Your Entries)")</h2>
-        <a asp-controller="Timesheet" asp-action="Create" class="bg-gradient-to-r from-purple-500 to-pink-600 text-white px-6 py-3 rounded-lg shadow-lg hover:scale-105 transition transform flex items-center gap-2">
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-5 h-5">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-            </svg>
-            Add Entry
+<div class="p-6">
+    <div class="flex justify-between items-center mb-6">
+        <h1 class="text-3xl font-bold text-gray-900">Timesheet</h1>
+        <a asp-action="Create" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
+            Add New Entry
         </a>
     </div>
 
-    <div class="bg-white rounded-xl shadow-lg overflow-hidden">
-        <div class="overflow-x-auto">
-            <table class="min-w-full">
-                <thead class="bg-gradient-to-r from-purple-600 to-pink-600 text-white">
-                    <tr>
-                        <th class="px-6 py-4 text-left">Date</th>
-                        <th class="px-6 py-4 text-left">Hours</th>
-                        <th class="px-6 py-4 text-left">Project</th>
-                        <th class="px-6 py-4 text-left">Description</th>
-                        @if (ViewBag.IsAdmin)
-                        {
-                            <th class="px-6 py-4 text-left">User ID</th>
-                        }
-                        <th class="px-6 py-4 text-center">Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach (var entry in Model)
-                    {
-                        <tr class="border-b hover:bg-gray-50 transition">
-                            <td class="px-6 py-4">@entry.Date.ToString("MMM dd, yyyy")</td>
-                            <td class="px-6 py-4">
-                                <span class="px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                                    @entry.HoursWorked hrs
-                                </span>
-                            </td>
-                            <td class="px-6 py-4 font-medium">@entry.ProjectName</td>
-                            <td class="px-6 py-4">@entry.Description</td>
-                            @if (ViewBag.IsAdmin)
-                            {
-                                <td class="px-6 py-4">User @entry.UserId</td>
-                            }
-                            <td class="px-6 py-4 text-center">
-                                <a asp-controller="Timesheet" asp-action="Edit" asp-route-id="@entry.Id" class="text-blue-600 hover:underline mr-3">Edit</a>
-                                <a asp-controller="Timesheet" asp-action="Delete" asp-route-id="@entry.Id" class="text-red-600 hover:underline" 
-                                   onclick="return confirm('Are you sure?')">Delete</a>
-                            </td>
-                        </tr>
-                    }
-                </tbody>
-            </table>
+    @if (User.IsInRole("Admin"))
+    {
+        <div class="mb-4">
+            <a asp-action="WeeklyView" class="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded">
+                Weekly View
+            </a>
         </div>
-    </div>
+    }
 
-    <!-- Pagination -->
-    <div class="flex justify-center mt-6 gap-2">
-        @if ((int)ViewBag.TotalPages > 1)
-        {
-            int currentPage = (int)ViewBag.Page;
-            int totalPages = (int)ViewBag.TotalPages;
-            
-            for (int i = 1; i <= totalPages; i++)
+    <div class="bg-white shadow overflow-hidden sm:rounded-md">
+        <div class="px-4 py-5 sm:p-6">
+            @if (Model != null && Model.Any())
             {
-                <a href="?page=@i" class="px-3 py-2 @(i == currentPage ? "bg-purple-600 text-white" : "bg-white text-purple-600 hover:bg-purple-50") border rounded">
-                    @i
-                </a>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                    Date
+                                </th>
+                                @if (User.IsInRole("Admin"))
+                                {
+                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Agent
+                                    </th>
+                                }
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                    Project
+                                </th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                    Description
+                                </th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                    Hours
+                                </th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                    Status
+                                </th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                    Actions
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white divide-y divide-gray-200">
+                            @foreach (var item in Model)
+                            {
+                                <tr>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                        @Html.DisplayFor(modelItem => item.Date)
+                                    </td>
+                                    @if (User.IsInRole("Admin"))
+                                    {
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                            @(item.User?.Agent?.Name ?? "N/A")
+                                        </td>
+                                    }
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                        @Html.DisplayFor(modelItem => item.ProjectName)
+                                    </td>
+                                    <td class="px-6 py-4 text-sm text-gray-900">
+                                        @Html.DisplayFor(modelItem => item.Description)
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                        @Html.DisplayFor(modelItem => item.HoursWorked)
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap">
+                                        @if (item.Status == "DRAFT")
+                                        {
+                                            <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-800">
+                                                Draft
+                                            </span>
+                                        }
+                                        else if (item.Status == "SUBMITTED")
+                                        {
+                                            <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800">
+                                                Submitted
+                                            </span>
+                                        }
+                                        else if (item.Status == "APPROVED")
+                                        {
+                                            <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
+                                                Approved
+                                            </span>
+                                        }
+                                        else if (item.Status == "REJECTED")
+                                        {
+                                            <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800">
+                                                Rejected
+                                            </span>
+                                        }
+                                        else if (item.Status == "LOCKED")
+                                        {
+                                            <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
+                                                Locked
+                                            </span>
+                                        }
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                        <a asp-action="Edit" asp-route-id="@item.Id" class="text-indigo-600 hover:text-indigo-900 mr-3">Edit</a>
+                                        @if (User.IsInRole("Admin"))
+                                        {
+                                            <a asp-action="Details" asp-route-id="@item.Id" class="text-blue-600 hover:text-blue-900 mr-3">Details</a>
+                                            <a asp-action="Delete" asp-route-id="@item.Id" class="text-red-600 hover:text-red-900">Delete</a>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Pagination -->
+                <div class="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6 mt-4">
+                    <div class="flex-1 flex justify-between sm:hidden">
+                        @if (ViewBag.CurrentPage > 1)
+                        {
+                            <a asp-action="Index" asp-route-page="@(ViewBag.CurrentPage - 1)" class="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
+                                Previous
+                            </a>
+                        }
+                        @if (ViewBag.CurrentPage < ViewBag.TotalPages)
+                        {
+                            <a asp-action="Index" asp-route-page="@(ViewBag.CurrentPage + 1)" class="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
+                                Next
+                            </a>
+                        }
+                    </div>
+                    <div class="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+                        <div>
+                            <p class="text-sm text-gray-700">
+                                Showing
+                                <span class="font-medium">@((ViewBag.CurrentPage - 1) * 10 + 1)</span>
+                                to
+                                <span class="font-medium">@Math.Min(ViewBag.CurrentPage * 10, ViewBag.TotalItems)</span>
+                                of
+                                <span class="font-medium">@ViewBag.TotalItems</span>
+                                results
+                            </p>
+                        </div>
+                        <div>
+                            <nav class="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
+                                @if (ViewBag.CurrentPage > 1)
+                                {
+                                    <a asp-action="Index" asp-route-page="@(ViewBag.CurrentPage - 1)" class="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50">
+                                        Previous
+                                    </a>
+                                }
+                                
+                                @for (int i = Math.Max(1, ViewBag.CurrentPage - 2); i <= Math.Min(ViewBag.TotalPages, ViewBag.CurrentPage + 2); i++)
+                                {
+                                    @if (i == ViewBag.CurrentPage)
+                                    {
+                                        <span class="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-blue-50 text-sm font-medium text-blue-600">
+                                            @i
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <a asp-action="Index" asp-route-page="@i" class="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50">
+                                            @i
+                                        </a>
+                                    }
+                                }
+                                
+                                @if (ViewBag.CurrentPage < ViewBag.TotalPages)
+                                {
+                                    <a asp-action="Index" asp-route-page="@(ViewBag.CurrentPage + 1)" class="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50">
+                                        Next
+                                    </a>
+                                }
+                            </nav>
+                        </div>
+                    </div>
+                </div>
             }
-        }
+            else
+            {
+                <div class="text-center py-12">
+                    <div class="text-gray-500 text-lg">
+                        No timesheet entries found.
+                    </div>
+                    <div class="mt-4">
+                        <a asp-action="Create" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
+                            Add Your First Entry
+                        </a>
+                    </div>
+                </div>
+            }
+        </div>
     </div>
 </div>

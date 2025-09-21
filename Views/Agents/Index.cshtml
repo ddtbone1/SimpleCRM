@@ -5,6 +5,23 @@
 }
 
 <div class="max-w-6xl mx-auto mt-12">
+    <!-- Pending User Approvals Section -->
+    <div class="mb-8">
+        <div class="flex items-center justify-between mb-4">
+            <h2 class="text-2xl font-bold text-gray-800">📋 Pending User Approvals</h2>
+            <button onclick="refreshPendingUsers()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors">
+                <svg class="w-4 h-4 inline mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                </svg>
+                Refresh
+            </button>
+        </div>
+        <div id="pending-users-container">
+            <!-- Pending users will be loaded here -->
+        </div>
+    </div>
+
+    <!-- Agents Management Section -->
     <div class="flex items-center justify-between mb-6">
         <h2 class="text-3xl font-bold text-gray-800">👨‍💼 Agents Management</h2>
         <a asp-controller="Agents" asp-action="Create" class="bg-gradient-to-r from-green-500 to-blue-600 text-white px-6 py-3 rounded-lg shadow-lg hover:scale-105 transition transform flex items-center gap-2">
@@ -80,3 +97,231 @@
         }
     </div>
 </div>
+
+<!-- Approve User Modal -->
+<div id="approveModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden z-50">
+    <div class="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+        <div class="fixed inset-0 transition-opacity" aria-hidden="true">
+            <div class="absolute inset-0 bg-gray-500 opacity-75"></div>
+        </div>
+        <div class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+            <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                <div class="sm:flex sm:items-start">
+                    <div class="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-green-100 sm:mx-0 sm:h-10 sm:w-10">
+                        <svg class="h-6 w-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                        </svg>
+                    </div>
+                    <div class="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left">
+                        <h3 class="text-lg leading-6 font-medium text-gray-900">Approve User Registration</h3>
+                        <div class="mt-2">
+                            <p class="text-sm text-gray-500">
+                                Are you sure you want to approve <strong id="approveUsername"></strong>? 
+                                This will activate their account and allow them to log in.
+                            </p>
+                            <div class="mt-4">
+                                <label for="approveComments" class="block text-sm font-medium text-gray-700">Comments (optional)</label>
+                                <textarea id="approveComments" rows="3" 
+                                          class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                                          placeholder="Add any comments about the approval..."></textarea>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                <button type="button" onclick="confirmApproval()" 
+                        class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-green-600 text-base font-medium text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 sm:ml-3 sm:w-auto sm:text-sm">
+                    Approve User
+                </button>
+                <button type="button" onclick="closeApproveModal()" 
+                        class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm">
+                    Cancel
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Reject User Modal -->
+<div id="rejectModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden z-50">
+    <div class="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+        <div class="fixed inset-0 transition-opacity" aria-hidden="true">
+            <div class="absolute inset-0 bg-gray-500 opacity-75"></div>
+        </div>
+        <div class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+            <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                <div class="sm:flex sm:items-start">
+                    <div class="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-red-100 sm:mx-0 sm:h-10 sm:w-10">
+                        <svg class="h-6 w-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </div>
+                    <div class="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left">
+                        <h3 class="text-lg leading-6 font-medium text-gray-900">Reject User Registration</h3>
+                        <div class="mt-2">
+                            <p class="text-sm text-gray-500">
+                                Are you sure you want to reject <strong id="rejectUsername"></strong>? 
+                                This will prevent them from accessing the system.
+                            </p>
+                            <div class="mt-4">
+                                <label for="rejectReason" class="block text-sm font-medium text-gray-700">Rejection Reason *</label>
+                                <textarea id="rejectReason" rows="3" required
+                                          class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-red-500 focus:border-red-500"
+                                          placeholder="Please provide a reason for rejection..."></textarea>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                <button type="button" onclick="confirmRejection()" 
+                        class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:ml-3 sm:w-auto sm:text-sm">
+                    Reject User
+                </button>
+                <button type="button" onclick="closeRejectModal()" 
+                        class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm">
+                    Cancel
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let currentUserId = null;
+
+// Load pending users on page load
+document.addEventListener('DOMContentLoaded', function() {
+    refreshPendingUsers();
+});
+
+function refreshPendingUsers() {
+    fetch('@Url.Action("GetPendingUsers", "Agents")')
+        .then(response => response.text())
+        .then(html => {
+            document.getElementById('pending-users-container').innerHTML = html;
+        })
+        .catch(error => {
+            console.error('Error loading pending users:', error);
+        });
+}
+
+function approveUser(userId, username) {
+    currentUserId = userId;
+    document.getElementById('approveUsername').textContent = username;
+    document.getElementById('approveModal').classList.remove('hidden');
+}
+
+function rejectUser(userId, username) {
+    currentUserId = userId;
+    document.getElementById('rejectUsername').textContent = username;
+    document.getElementById('rejectModal').classList.remove('hidden');
+}
+
+function confirmApproval() {
+    if (!currentUserId) return;
+    
+    const comments = document.getElementById('approveComments').value;
+    
+    fetch('@Url.Action("ApproveUser", "Agents")', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'RequestVerificationToken': document.querySelector('input[name="__RequestVerificationToken"]')?.value || ''
+        },
+        body: `userId=${currentUserId}&comments=${encodeURIComponent(comments)}`
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showNotification(data.message, 'success');
+            refreshPendingUsers();
+            closeApproveModal();
+        } else {
+            showNotification(data.message, 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showNotification('An error occurred while approving the user.', 'error');
+    });
+}
+
+function confirmRejection() {
+    if (!currentUserId) return;
+    
+    const reason = document.getElementById('rejectReason').value.trim();
+    if (!reason) {
+        showNotification('Please provide a rejection reason.', 'error');
+        return;
+    }
+    
+    fetch('@Url.Action("RejectUser", "Agents")', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'RequestVerificationToken': document.querySelector('input[name="__RequestVerificationToken"]')?.value || ''
+        },
+        body: `userId=${currentUserId}&reason=${encodeURIComponent(reason)}`
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showNotification(data.message, 'success');
+            refreshPendingUsers();
+            closeRejectModal();
+        } else {
+            showNotification(data.message, 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showNotification('An error occurred while rejecting the user.', 'error');
+    });
+}
+
+function closeApproveModal() {
+    document.getElementById('approveModal').classList.add('hidden');
+    document.getElementById('approveComments').value = '';
+    currentUserId = null;
+}
+
+function closeRejectModal() {
+    document.getElementById('rejectModal').classList.add('hidden');
+    document.getElementById('rejectReason').value = '';
+    currentUserId = null;
+}
+
+function showNotification(message, type) {
+    // Create notification element
+    const notification = document.createElement('div');
+    notification.className = `fixed top-4 right-4 z-50 max-w-sm w-full px-4 py-3 rounded-lg shadow-lg transition-all duration-300 ${
+        type === 'success' ? 'bg-green-50 border border-green-200 text-green-700' : 'bg-red-50 border border-red-200 text-red-700'
+    }`;
+    notification.textContent = message;
+    
+    document.body.appendChild(notification);
+    
+    // Remove after 5 seconds
+    setTimeout(() => {
+        notification.style.opacity = '0';
+        setTimeout(() => {
+            document.body.removeChild(notification);
+        }, 300);
+    }, 5000);
+}
+
+// Close modals when clicking outside
+document.getElementById('approveModal').addEventListener('click', function(e) {
+    if (e.target === this) {
+        closeApproveModal();
+    }
+});
+
+document.getElementById('rejectModal').addEventListener('click', function(e) {
+    if (e.target === this) {
+        closeRejectModal();
+    }
+});
+</script>

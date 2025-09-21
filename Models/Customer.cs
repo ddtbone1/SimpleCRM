@@ -7,12 +7,25 @@ namespace SimpleCRM.Models
         public int Id { get; set; }
 
         [Required]
-        public string Name { get; set; }
+        [StringLength(100)]
+        public string Name { get; set; } = string.Empty;
 
         [Required]
         [EmailAddress]
-        public string Email { get; set; }
+        [StringLength(255)]
+        public string Email { get; set; } = string.Empty;
 
-        public string Phone { get; set; }
+        [StringLength(20)]
+        public string Phone { get; set; } = string.Empty;
+
+        public bool IsActive { get; set; } = true;
+
+        // Soft delete
+        public DateTime? DeletedAt { get; set; }
+        public bool IsDeleted => DeletedAt.HasValue;
+        
+        // Audit fields
+        public DateTime CreatedDate { get; set; } = DateTime.Now;
+        public DateTime? UpdatedDate { get; set; }
     }
 }
